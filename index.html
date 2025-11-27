@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Fibonacci ve Diğer Şifreleyiciler</title>
+<style>
+    html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #0f0f0f, #1a1a1a);
+        color: #ffffff;
+    }
+
+    .container {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        height: 100%;
+        padding: 20px;
+        box-sizing: border-box;
+    }
+
+    h2 {
+        margin-bottom: 20px;
+        font-weight: 600;
+        color: #00d8ff;
+        text-shadow: 1px 1px 5px #000;
+    }
+
+    label {
+        align-self: flex-start;
+        margin-top: 15px;
+        margin-bottom: 5px;
+        font-weight: 500;
+        color: #cccccc;
+    }
+
+    select, button {
+        padding: 10px;
+        border-radius: 6px;
+        border: none;
+        font-size: 1rem;
+        margin-bottom: 15px;
+    }
+
+    select {
+        background-color: #222;
+        color: #fff;
+        width: 100%;
+    }
+
+    button {
+        background-color: #00d8ff;
+        color: #000;
+        font-weight: bold;
+        cursor: pointer;
+        transition: 0.2s;
+        width: 48%;
+    }
+
+    button:hover {
+        background-color: #00a8cc;
+    }
+
+    .button-row {
+        display: flex;
+        justify-content: space-between;
+        width: 100%;
+        margin-bottom: 15px;
+    }
+
+    textarea {
+        width: 100%;
+        padding: 15px;
+        border-radius: 6px;
+        border: none;
+        resize: none;
+        font-family: 'Courier New', monospace;
+        font-size: 1rem;
+        background-color: #111;
+        color: #00ff00;
+        box-shadow: inset 0 0 10px #00ff0033;
+    }
+
+    .container-inner {
+        max-width: 800px;
+        width: 100%;
+    }
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="container-inner">
+        <h2>Şifreleme Aracı</h2>
+        
+        <label>Yöntem Seçin:</label>
+        <select id="methodSelect">
+            <option value="fibonacci">Fibonacci Şifreleme</option>
+            <option value="caesar">Sezar Şifreleme</option>
+            <option value="atbash">Atbash Şifreleme</option>
+            <option value="rot13">ROT13 Şifreleme</option>
+        </select>
+        
+        <label>Metin:</label>
+        <textarea id="inputText" rows="5" placeholder="Şifrelenecek metni buraya yazın..."></textarea>
+        
+        <div class="button-row">
+            <button onclick="encryptText()">Şifrele</button>
+            <button onclick="decryptText()">Çöz</button>
+        </div>
+        
+        <label>Sonuç:</label>
+        <textarea id="outputText" rows="5" readonly placeholder="Sonuç burada gözükecek..."></textarea>
+    </div>
+</div>
+
+<script>
+// =================== Fibonacci (orijinal) ===================
+const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const m = 64;
+
+function fibonacci(n) {
+    let F = [0,1];
+    for(let i=2;i<=n;i++) F.push(F[F.length-1]+F[F.length-2]);
+    return F;
+}
+
+function fibonacciTriangle(depth){
+    const F = fibonacci(depth*2+5);
+    let T=[];
+    for(let r=0;r<depth;r++){
+        let row=[];
+        for(let c=0;c<=r;c++) row.push(F[r+c+1]);
+        T.push(row);
+    }
+    return T;
+}
+
+function detMod64(K){ return (K[0][0]*K[1][1] - K[0][1]*K[1][0]) % m; }
+function gcd(a,b){ return b===0 ? a : gcd(b, a%b); }
+
+function getInvertibleKeyMatrix(T){
+    for(let r=0;r<T.length-1;r++){
+        for(let c=0;c<T[r].length-1;c++){
+            let K = [
+                [T[r][c],   T[r][c+1]],
+                [T[r+1][c], T[r+1][c+1]]
+            ];
+            if(gcd(detMod64(K), m) === 1) return K;
+        }
+    }
+    throw "Terslenebilir matris bulunamadı!";
+}
+
+function charToNum(c){ return B64.indexOf(c); }
+function numToChar(n){ return B64[n]; }
+
+function matvecMul(K,v){
+    return [
+        (K[0][0]*v[0]+K[0][1]*v[1])%m,
+        (K[1][0]*v[0]+K[1][1]*v[1])%m
+    ];
+}
+
+function invertMatrix(K){
+    let a=K[0][0], b=K[0][1], c=K[1][0], d=K[1][1];
+    let det = (a*d - b*c)%m;
+    if(det<0) det+=m;
+
+    function modInverse(a,m){
+        for(let x=1;x<m;x++) if((a*x)%m===1) return x;
+        return null;
+    }
+
+    let detInv = modInverse(det,m);
+    if(detInv===null) throw "Matris terslenemiyor";
+
+    return [
+        [( d*detInv)%m, (-b*detInv+m)%m],
+        [(-c*detInv+m)%m, (a*detInv)%m]
+    ];
+}
+
+const T = fibonacciTriangle(10);
+const K = getInvertibleKeyMatrix(T);
+
+// =================== Yeni Şifreleme Yöntemleri ===================
+function caesarEncrypt(text, shift=3){
+    return text.split('').map(c=>{
+        let code=c.charCodeAt(0);
+        if(code>=65 && code<=90) return String.fromCharCode((code-65+shift)%26+65);
+        if(code>=97 && code<=122) return String.fromCharCode((code-97+shift)%26+97);
+        return c;
+    }).join('');
+}
+function caesarDecrypt(text, shift=3){ return caesarEncrypt(text,26-shift); }
+
+function atbashEncrypt(text){
+    return text.split('').map(c=>{
+        let code=c.charCodeAt(0);
+        if(code>=65 && code<=90) return String.fromCharCode(90-(code-65));
+        if(code>=97 && code<=122) return String.fromCharCode(122-(code-97));
+        return c;
+    }).join('');
+}
+function atbashDecrypt(text){ return "Bu şifreleme tek yönlü"; }
+
+function rot13Encrypt(text){
+    return text.replace(/[A-Za-z]/g, c=>{
+        let code=c.charCodeAt(0);
+        if(code>=65 && code<=90) return String.fromCharCode((code-65+13)%26+65);
+        if(code>=97 && code<=122) return String.fromCharCode((code-97+13)%26+97);
+        return c;
+    });
+}
+function rot13Decrypt(text){ return rot13Encrypt(text); }
+
+// =================== Buton İşlevleri ===================
+function encryptText(){
+    let method = document.getElementById("methodSelect").value;
+    let msg = document.getElementById("inputText").value;
+    let result = "";
+    try{
+        if(method==="fibonacci"){
+            let b64 = btoa(msg).replace(/=/g,'');
+            let nums = Array.from(b64).map(charToNum);
+            if(nums.length%2===1) nums.push(0);
+            let cipherNums=[];
+            for(let i=0;i<nums.length;i+=2) cipherNums.push(...matvecMul(K,[nums[i],nums[i+1]]));
+            result = cipherNums.map(numToChar).join('');
+        } else if(method==="caesar") result = caesarEncrypt(msg);
+        else if(method==="atbash") result = atbashEncrypt(msg);
+        else if(method==="rot13") result = rot13Encrypt(msg);
+    }catch(e){ result="Hata: "+e; }
+    document.getElementById("outputText").value = result;
+}
+
+function decryptText(){
+    let method = document.getElementById("methodSelect").value;
+    let cipher = document.getElementById("outputText").value;
+    let result = "";
+    try{
+        if(method==="fibonacci"){
+            let nums = Array.from(cipher).map(charToNum);
+            if(nums.length%2===1) nums.push(0);
+            let K_inv = invertMatrix(K);
+            let plainNums=[];
+            for(let i=0;i<nums.length;i+=2) plainNums.push(...matvecMul(K_inv,[nums[i],nums[i+1]]));
+            let b64 = plainNums.map(numToChar).join('');
+            while(b64.length%4!==0) b64+='=';
+            result = atob(b64);
+        } else if(method==="caesar") result = caesarDecrypt(cipher);
+        else if(method==="atbash") result = "Bu şifreleme tek yönlü";
+        else if(method==="rot13") result = rot13Decrypt(cipher);
+    }catch(e){ result="Çözülemedi"; }
+    document.getElementById("outputText").value = result;
+}
+</script>
